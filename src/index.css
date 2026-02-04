@@ -387,8 +387,8 @@ tr:hover {
 }
 
 .sankey-container {
-  min-width: 1400px;
-  min-height: 1200px;
+  min-width: 1200px;
+  min-height: 1600px;
   background: transparent;
   border-radius: 8px;
   padding: 0.5rem;
@@ -416,11 +416,26 @@ tr:hover {
   justify-content: center;
 }
 
-.sankey-zoom-controls button:last-child {
+.sankey-zoom-controls button:nth-last-child(2) {
   width: auto;
   padding: 0 0.75rem;
   font-size: 0.8rem;
   font-weight: 500;
+}
+
+.sankey-export-btn {
+  width: auto !important;
+  padding: 0 0.75rem !important;
+  font-size: 0.8rem !important;
+  font-weight: 500 !important;
+  margin-left: 0.5rem;
+  background: #059669 !important;
+  border-color: #059669 !important;
+  color: white !important;
+}
+
+.sankey-export-btn:hover {
+  background: #047857 !important;
 }
 
 .sankey-zoom-controls button:hover {

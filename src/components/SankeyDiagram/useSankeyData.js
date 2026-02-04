@@ -26,6 +26,12 @@ export function useSankeyData(reconciledData) {
 
     const totalConnects = industries.reduce((s, ind) => s + agg[ind].connects, 0)
     const totalConversations = industries.reduce((s, ind) => s + agg[ind].conversations, 0)
+    const totalMeetings = industries.reduce((s, ind) => s + agg[ind].meetings, 0)
+    const totalApps = industries.reduce((s, ind) => s + agg[ind].applications, 0)
+    const totalApproved = industries.reduce((s, ind) => s + agg[ind].approved, 0)
+    const totalRejected = industries.reduce((s, ind) => s + agg[ind].rejected, 0)
+
+    const pct = (num, den) => den > 0 ? Math.round((num / den) * 100) : 0
 
     // Build nodes
     const nodeLabels = []
@@ -44,13 +50,15 @@ export function useSankeyData(reconciledData) {
 
     // Stages 2-4: Conversations, Meetings, Apps (each has n industry nodes + 1 drop-off)
     const stageKeys = ['conversations', 'meetings', 'applications']
-    const stageDisplayNames = ['Conversations', 'Meetings', 'Apps']
+    const prevKeys = ['connects', 'conversations', 'meetings']
     const dropOffNames = ['Not Interested', 'Not Interested.', 'Not Interested..']
 
     stageKeys.forEach((key, si) => {
       industries.forEach(ind => {
         const val = agg[ind][key]
-        nodeLabels.push(`${stageDisplayNames[si]} - ${ind}\n${val}`)
+        const prev = agg[ind][prevKeys[si]]
+        const rate = pct(val, prev)
+        nodeLabels.push(`${val} (${rate}%)`)
         nodeColors.push(INDUSTRY_COLORS[ind])
       })
       // Drop-off node
@@ -59,12 +67,28 @@ export function useSankeyData(reconciledData) {
     })
 
     // Stage 5: Outcomes (3 nodes)
-    nodeLabels.push('Approved')
+    const approvedRate = pct(totalApproved, totalApps)
+    const rejectedRate = pct(totalRejected, totalApps)
+    const notProgRate = pct(totalApps - totalApproved - totalRejected, totalApps)
+    nodeLabels.push(`Approved\n${totalApproved} (${approvedRate}%)`)
     nodeColors.push('#4CAF50')
-    nodeLabels.push('Rejected')
+    nodeLabels.push(`Rejected\n${totalRejected} (${rejectedRate}%)`)
     nodeColors.push('#F44336')
-    nodeLabels.push('Not Progressed')
+    nodeLabels.push(`Not Progressed\n${totalApps - totalApproved - totalRejected} (${notProgRate}%)`)
     nodeColors.push(NOT_INTERESTED_COLOR)
+
+    // Totals for annotations
+    const totals = {
+      connects: totalConnects,
+      conversations: totalConversations,
+      convRate: pct(totalConversations, totalConnects),
+      meetings: totalMeetings,
+      meetRate: pct(totalMeetings, totalConversations),
+      apps: totalApps,
+      appRate: pct(totalApps, totalMeetings),
+      approved: totalApproved,
+      rejected: totalRejected,
+    }
 
     // Build links
     const sources = []
@@ -143,6 +167,7 @@ export function useSankeyData(reconciledData) {
         value: values,
         color: linkColors,
       },
+      totals,
     }
   }, [reconciledData])
 }
