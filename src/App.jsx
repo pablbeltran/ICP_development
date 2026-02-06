@@ -9,47 +9,20 @@ const CSV_FILES = {
     category: 'master'
   },
   nooks: {
-    name: 'Nooks',
+    name: 'Cold Calls',
     path: '/data/nooks.csv',
     category: 'outreach'
   },
   instantly: {
-    name: 'Instantly',
+    name: 'Email Outreach',
     path: '/data/instantly.csv',
     category: 'outreach'
   },
   unify: {
-    name: 'Unify',
+    name: 'Website Visits',
     path: '/data/unify.csv',
     category: 'outreach'
   }
-}
-
-function CSVTable({ data, columns }) {
-  if (!data || data.length === 0) return <p>No data available</p>
-
-  return (
-    <div className="table-container">
-      <table>
-        <thead>
-          <tr>
-            {columns.map((col, i) => (
-              <th key={i}>{col}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((row, i) => (
-            <tr key={i}>
-              {columns.map((col, j) => (
-                <td key={j}>{row[col]}</td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
 }
 
 const NUMERIC_COLUMNS = ['Dials', 'Connects', 'Conversations', 'Meetings Set', 'Emails Sent', 'Email Opens', 'Email Clicks']
@@ -62,15 +35,12 @@ function ReconciledTable({ data, columns }) {
 
   if (!data || data.length === 0) return <p>No data available</p>
 
-  // Get unique values for filter dropdowns
   const getUniqueValues = (column) => {
     const values = [...new Set(data.map(row => row[column]).filter(Boolean))]
     return values.sort()
   }
 
-  // Apply filters and search
   const filteredData = data.filter(row => {
-    // Check search term
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase()
       const matchesSearch = Object.values(row).some(val =>
@@ -78,23 +48,16 @@ function ReconciledTable({ data, columns }) {
       )
       if (!matchesSearch) return false
     }
-
-    // Check filters
     for (const [column, value] of Object.entries(filters)) {
       if (value && row[column] !== value) return false
     }
-
     return true
   })
 
-  // Apply sorting
   const sortedData = [...filteredData].sort((a, b) => {
     if (!sortConfig.key) return 0
-
     let aVal = a[sortConfig.key]
     let bVal = b[sortConfig.key]
-
-    // Handle numeric sorting
     if (NUMERIC_COLUMNS.includes(sortConfig.key)) {
       aVal = parseInt(aVal) || 0
       bVal = parseInt(bVal) || 0
@@ -105,13 +68,11 @@ function ReconciledTable({ data, columns }) {
       aVal = String(aVal).toLowerCase()
       bVal = String(bVal).toLowerCase()
     }
-
     if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1
     if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1
     return 0
   })
 
-  // Calculate totals
   const totals = {}
   columns.forEach(col => {
     if (NUMERIC_COLUMNS.includes(col)) {
@@ -139,10 +100,7 @@ function ReconciledTable({ data, columns }) {
   }
 
   const handleFilterChange = (column, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [column]: value
-    }))
+    setFilters(prev => ({ ...prev, [column]: value }))
   }
 
   const clearFilters = () => {
@@ -182,11 +140,7 @@ function ReconciledTable({ data, columns }) {
           <thead>
             <tr>
               {columns.map((col, i) => (
-                <th
-                  key={i}
-                  onClick={() => handleSort(col)}
-                  className="sortable-header"
-                >
+                <th key={i} onClick={() => handleSort(col)} className="sortable-header">
                   {col}
                   {sortConfig.key === col && (
                     <span className="sort-indicator">
@@ -217,36 +171,60 @@ function ReconciledTable({ data, columns }) {
   )
 }
 
-function CSVCard({ title, data, columns, stats }) {
+function CSVPreviewModal({ data, columns, title, onClose }) {
+  if (!data || !columns) return null
+
   return (
-    <div className="csv-card">
-      <div className="csv-card-header">
-        <h3>{title}</h3>
-      </div>
-      <CSVTable data={data} columns={columns} />
-      {stats && (
-        <div className="stats">
-          {stats.map((stat, i) => (
-            <div key={i} className="stat">
-              <div className="stat-value">{stat.value}</div>
-              <div className="stat-label">{stat.label}</div>
-            </div>
-          ))}
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{title}</h3>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
-      )}
+        <div className="modal-body">
+          <div className="preview-table-container">
+            <table className="preview-table">
+              <thead>
+                <tr>
+                  {columns.map((col, i) => (
+                    <th key={i}>{col}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.slice(0, 100).map((row, i) => (
+                  <tr key={i}>
+                    {columns.map((col, j) => (
+                      <td key={j}>{row[col]}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {data.length > 100 && (
+            <p className="preview-note">Showing first 100 of {data.length} records</p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
 
-function FileUploader({ onUpload, label, dataKey }) {
-  const handleFileChange = (e) => {
-    const file = e.target.files[0]
+function FileUploader({ onUpload, onPreview, label, description, icon, dataKey, hasData, defaultFileName }) {
+  const [isDragging, setIsDragging] = useState(false)
+  const [fileName, setFileName] = useState(null)
+  const [rowCount, setRowCount] = useState(null)
+
+  const parseFile = (file) => {
     if (!file) return
 
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: (result) => {
+        setFileName(file.name)
+        setRowCount(result.data.length)
         onUpload(dataKey, {
           name: label,
           rows: result.data,
@@ -256,9 +234,60 @@ function FileUploader({ onUpload, label, dataKey }) {
     })
   }
 
+  const handleFileChange = (e) => {
+    parseFile(e.target.files[0])
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    setIsDragging(false)
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file && file.name.endsWith('.csv')) {
+      parseFile(file)
+    }
+  }
+
+  const handlePreviewClick = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onPreview(dataKey)
+  }
+
   return (
-    <div className="file-uploader">
-      <label>{label}</label>
+    <div
+      className={`file-uploader-dropzone ${isDragging ? 'dragging' : ''} ${fileName || hasData ? 'has-file' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div className="dropzone-icon">{icon}</div>
+      <div className="dropzone-label">{label}</div>
+      <div className="dropzone-description">{description}</div>
+      <div className="dropzone-content">
+        {fileName || hasData ? (
+          <div className="file-info">
+            <span className="file-name">{fileName || defaultFileName}</span>
+            <span className="file-rows">{rowCount || hasData} records</span>
+          </div>
+        ) : (
+          <span className="dropzone-hint">Drop CSV here or click to browse</span>
+        )}
+      </div>
+      {(fileName || hasData) && (
+        <button className="preview-btn-small" onClick={handlePreviewClick}>
+          Preview
+        </button>
+      )}
       <input type="file" accept=".csv" onChange={handleFileChange} />
     </div>
   )
@@ -267,6 +296,50 @@ function FileUploader({ onUpload, label, dataKey }) {
 function App() {
   const [csvData, setCsvData] = useState({})
   const [loading, setLoading] = useState(true)
+  const [analysisRun, setAnalysisRun] = useState(false)
+  const [previewKey, setPreviewKey] = useState(null)
+
+  const handlePreview = (key) => {
+    setPreviewKey(key)
+  }
+
+  const closePreview = () => {
+    setPreviewKey(null)
+  }
+
+  const runAnalysis = () => {
+    setAnalysisRun(true)
+  }
+
+  const clearAll = () => {
+    setCsvData({})
+    setAnalysisRun(false)
+  }
+
+  const downloadReconciledCSV = () => {
+    if (!reconciledData || reconciledData.length === 0) return
+
+    const headers = Object.keys(reconciledData[0])
+    const csvContent = [
+      headers.join(','),
+      ...reconciledData.map(row =>
+        headers.map(header => {
+          const value = String(row[header] || '')
+          return value.includes(',') ? `"${value}"` : value
+        }).join(',')
+      )
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'reconciled_accounts.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const hasRequiredData = csvData.hubspot?.rows?.length > 0
 
   const generateReconciledCSV = () => {
     const hubspotData = csvData.hubspot?.rows || []
@@ -333,31 +406,6 @@ function App() {
     return generateReconciledCSV()
   }, [csvData])
 
-  const downloadReconciledCSV = () => {
-    const data = reconciledData
-    if (data.length === 0) return
-
-    const headers = Object.keys(data[0])
-    const csvContent = [
-      headers.join(','),
-      ...data.map(row =>
-        headers.map(header => {
-          const value = row[header] || ''
-          // Wrap in quotes if contains comma
-          return value.includes(',') ? `"${value}"` : value
-        }).join(',')
-      )
-    ].join('\n')
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'reconciled_accounts.csv'
-    link.click()
-    URL.revokeObjectURL(url)
-  }
-
   useEffect(() => {
     const loadCSVs = async () => {
       const data = {}
@@ -394,43 +442,6 @@ function App() {
     }))
   }
 
-  const calculateStats = (key) => {
-    const data = csvData[key]?.rows
-    if (!data || data.length === 0) return null
-
-    if (key === 'nooks') {
-      const totalDials = data.reduce((sum, row) => sum + parseInt(row['Dials'] || 0), 0)
-      const totalConnects = data.reduce((sum, row) => sum + parseInt(row['Connects'] || 0), 0)
-      const totalMeetings = data.reduce((sum, row) => sum + parseInt(row['Meetings Set'] || 0), 0)
-      return [
-        { label: 'Total Dials', value: totalDials.toLocaleString() },
-        { label: 'Total Connects', value: totalConnects.toLocaleString() },
-        { label: 'Total Meetings', value: totalMeetings },
-        { label: 'Avg Connect Rate', value: ((totalConnects / totalDials) * 100).toFixed(1) + '%' }
-      ]
-    }
-
-    if (key === 'instantly') {
-      const totalSent = data.reduce((sum, row) => sum + parseInt(row['Emails Sent'] || 0), 0)
-      const totalOpens = data.reduce((sum, row) => sum + parseInt(row['Opens'] || 0), 0)
-      const totalClicks = data.reduce((sum, row) => sum + parseInt(row['Clicks'] || 0), 0)
-      return [
-        { label: 'Total Emails', value: totalSent.toLocaleString() },
-        { label: 'Total Opens', value: totalOpens.toLocaleString() },
-        { label: 'Total Clicks', value: totalClicks },
-        { label: 'Avg Open Rate', value: ((totalOpens / totalSent) * 100).toFixed(1) + '%' }
-      ]
-    }
-
-    if (key === 'unify') {
-      return [
-        { label: 'Companies Tracked', value: data.length }
-      ]
-    }
-
-    return null
-  }
-
   if (loading) {
     return <div className="container"><p>Loading data...</p></div>
   }
@@ -441,99 +452,95 @@ function App() {
 
       <div className="section upload-section">
         <div className="section-header">
-          <h2>Upload Your Own CSV Files</h2>
+          <h2>Upload CSV Files</h2>
         </div>
-        <p className="upload-description">Replace the sample data with your own CSV files.</p>
         <div className="upload-grid">
           <FileUploader
-            label="Master List of Accounts (CRM)"
+            icon="🏢"
+            label="CRM Accounts"
+            description="Master list of target companies"
             dataKey="hubspot"
             onUpload={handleUpload}
+            onPreview={handlePreview}
+            hasData={csvData.hubspot?.rows?.length}
+            defaultFileName="master_list_hubspot.csv"
           />
           <FileUploader
-            label="Nooks"
+            icon="📞"
+            label="Cold Calls"
+            description="Dials, connects & conversations"
             dataKey="nooks"
             onUpload={handleUpload}
+            onPreview={handlePreview}
+            hasData={csvData.nooks?.rows?.length}
+            defaultFileName="nooks.csv"
           />
           <FileUploader
-            label="Instantly"
+            icon="✉️"
+            label="Email Outreach"
+            description="Sends, opens & click data"
             dataKey="instantly"
             onUpload={handleUpload}
+            onPreview={handlePreview}
+            hasData={csvData.instantly?.rows?.length}
+            defaultFileName="instantly.csv"
           />
           <FileUploader
-            label="Unify"
+            icon="🌐"
+            label="Website Visits"
+            description="Intent signals & page views"
             dataKey="unify"
             onUpload={handleUpload}
+            onPreview={handlePreview}
+            hasData={csvData.unify?.rows?.length}
+            defaultFileName="unify.csv"
           />
         </div>
-      </div>
 
-      <div className="section">
-        <div className="section-header">
-          <h2>Master List of Accounts (CRM)</h2>
-        </div>
-        {csvData.hubspot && (
-          <CSVCard
-            title={csvData.hubspot.name}
-            data={csvData.hubspot.rows}
-            columns={csvData.hubspot.columns}
-            stats={[
-              { label: 'Total Companies', value: csvData.hubspot.rows.length }
-            ]}
-          />
-        )}
-      </div>
-
-      <div className="section outreach-section">
-        <div className="section-header">
-          <h2>Mock Data from Outreach Platforms</h2>
-        </div>
-
-        <div className="outreach-grid">
-          {csvData.nooks && (
-            <CSVCard
-              title={csvData.nooks.name}
-              data={csvData.nooks.rows}
-              columns={csvData.nooks.columns}
-              stats={calculateStats('nooks')}
-            />
-          )}
-
-          {csvData.instantly && (
-            <CSVCard
-              title={csvData.instantly.name}
-              data={csvData.instantly.rows}
-              columns={csvData.instantly.columns}
-              stats={calculateStats('instantly')}
-            />
-          )}
-
-          {csvData.unify && (
-            <CSVCard
-              title={csvData.unify.name}
-              data={csvData.unify.rows}
-              columns={csvData.unify.columns}
-              stats={calculateStats('unify')}
-            />
+        <div className="run-section">
+          <div className="run-buttons">
+            <button
+              className={`run-btn ${hasRequiredData ? 'active' : 'disabled'}`}
+              onClick={runAnalysis}
+              disabled={!hasRequiredData}
+            >
+              Run
+            </button>
+            <button
+              className={`clear-btn ${hasRequiredData ? 'active' : 'disabled'}`}
+              onClick={clearAll}
+              disabled={!hasRequiredData}
+            >
+              Clear All
+            </button>
+          </div>
+          {!hasRequiredData && (
+            <p className="run-hint">Upload at least the CRM Accounts file to run</p>
           )}
         </div>
       </div>
 
-      <div className="section reconciled-section">
-        <div className="section-header">
-          <h2>Reconciled Account Data</h2>
-          <button className="download-btn" onClick={downloadReconciledCSV}>
-            Download CSV
-          </button>
-        </div>
-        <p className="reconciled-description">
-          Combined view of all account data from CRM, Nooks, Instantly, and Unify.
-        </p>
-        {csvData.hubspot && (
-          <div className="csv-card">
-            <div className="csv-card-header">
-              <h3>Reconciled Accounts</h3>
+      {previewKey && csvData[previewKey] && (
+        <CSVPreviewModal
+          data={csvData[previewKey].rows}
+          columns={csvData[previewKey].columns}
+          title={csvData[previewKey].name}
+          onClose={closePreview}
+        />
+      )}
+
+      {analysisRun && reconciledData.length > 0 && (
+        <>
+          <div className="section reconciled-section">
+            <div className="section-header">
+              <h2>Reconciled Accounts</h2>
+              <button className="download-btn" onClick={downloadReconciledCSV}>
+                Download CSV
+              </button>
             </div>
+            <p className="reconciled-description">
+              Combined view of all account data from your uploaded files.
+            </p>
             <ReconciledTable
               data={reconciledData}
               columns={[
@@ -557,19 +564,17 @@ function App() {
               ]}
             />
           </div>
-        )}
-      </div>
 
-      {reconciledData.length > 0 && (
-        <div className="section sankey-section">
-          <div className="section-header">
-            <h2>Cold Call Pipeline Flow</h2>
+          <div className="section sankey-section">
+            <div className="section-header">
+              <h2>Cold Call Pipeline Flow</h2>
+            </div>
+            <p className="sankey-description">
+              Tracking cold call pipeline from dials to outcomes by industry. Gray flows indicate drop-offs at each stage.
+            </p>
+            <SankeyDiagram reconciledData={reconciledData} />
           </div>
-          <p className="sankey-description">
-            Tracking cold call pipeline from dials to outcomes by industry. Gray flows indicate drop-offs at each stage.
-          </p>
-          <SankeyDiagram reconciledData={reconciledData} />
-        </div>
+        </>
       )}
     </div>
   )
